@@ -1,1 +1,69 @@
+import cv2
+import os
+import numpy as np
 
+DATASET_DIR = 'dataset'  # path to your own dataset
+TRAINED_MODEL_PATH = 'face_trained.yml'  # save the model
+FEATURES_PATH = 'features.npy'  # path to the files including features and labels w.r.t. jpg
+LABELS_PATH = 'labels.npy'
+
+face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml') # default face detector via Haar Cascade
+
+features = []
+labels = []
+people = [person for person in os.listdir(DATASET_DIR)]  # array with photos
+
+
+
+
+
+
+
+def create_train():
+
+    for person in people:
+        person_path = os.path.join(DATASET_DIR, person)
+        label = people.index(person)
+
+        # Iterate over all the images of the person
+        for img_name in os.listdir(person_path):
+            img_path = os.path.join(person_path, img_name)
+            img_array = cv2.imread(img_path)
+
+            if img_array is None:
+                continue  # Skip if the image is not readable
+
+            # Convert the image to grayscale (required for face detection)
+            gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
+
+            # Detect faces in the image using the Viola-Jones algorithm
+            faces_rect = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4)
+
+            # Process each detected face
+            for (x, y, w, h) in faces_rect:
+                faces_roi = gray[y:y+h, x:x+w]  # Region of Interest (the face)
+                features.append(faces_roi)  # Add face data to features
+                labels.append(label)  # Add corresponding label
+
+# Start the training data collection process
+print('Training data collection started...')
+create_train()
+print(f'Training data collected. Found {len(features)} faces.')
+
+# Convert the Python lists into NumPy arrays
+features = np.array(features, dtype='object')
+labels = np.array(labels)
+
+# Save the features and labels arrays (optional)
+np.save(FEATURES_PATH, features)
+np.save(LABELS_PATH, labels)
+
+# Create an LBPH Face Recognizer
+face_recognizer = cv2.face.LBPHFaceRecognizer_create()
+
+# Train the recognizer on the collected faces and labels
+face_recognizer.train(features, labels)
+
+# Save the trained model to a file
+face_recognizer.save(TRAINED_MODEL_PATH)
+print(f'Training complete. Model saved to {TRAINED_MODEL_PATH}.')
