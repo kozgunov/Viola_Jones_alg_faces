@@ -1,0 +1,165 @@
+import cv2
+import time
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def keyboard_input(frame, sign_exit, img_counter):  # taking photo & exit
+    k = cv2.waitKey(1)
+    if k == 13:  # ENTER pressed
+        print("Escape hit, closing...")
+        sign_exit = False
+        exit()
+
+    elif k == 32:  # SPACE pressed
+        img_counter += 1
+        img_name = "opencv_frame_{}.png".format(img_counter)
+        cv2.imwrite(img_name, frame)
+        print("{} written!".format(img_name))
+    return img_counter
+
+
+def draw(rescaled_frame, faces):
+    IMREAD = cv2.cvtColor(rescaled_frame, cv2.IMREAD_COLOR)
+    blank = np.zeros(rescaled_frame.shape[:2], dtype='uint8')
+    for (x, y, w, h) in faces[2]:
+        circle_mask = cv2.ellipse(blank, (round(x + w / 2), round(y + h / 2)),
+                                  (round((abs(w)) / 1.95), round(abs(h / 1.45))), 0, 0, 360, (255, 255, 255), -1)
+        mask = cv2.bitwise_and(IMREAD, IMREAD, mask=circle_mask)
+        cv2.imshow('masking_center', mask)
+
+    for (x, y, w, h, eyes) in faces[0]:
+        cv2.ellipse(rescaled_frame, (round(x + w / 2), round(y + h / 2)), (round((abs(w)) / 1.95), round(abs(h / 1.45))), 0, 0, 360, (0, 255, 0), thickness=4)  # face
+        for (x1, y1, w1, h1) in eyes[0]:
+            cv2.circle(rescaled_frame, (x + x1 + round(w1 / 2), y + y1 + round(h1 / 1.5)), round(h1 / 3.5),
+                       (100, 100, 255), thickness=2, lineType=0, shift=0)  # right eye
+        for (x1, y1, w1, h1) in eyes[1]:
+            cv2.circle(rescaled_frame, (round((2 * x + w) / 2) + x1 + round(w1 / 2), y + y1 + round(h1 / 1.5)),
+                       round(h1 / 3.5), (100, 100, 255), thickness=2, lineType=0, shift=0)  # letf eye
+
+        # for (a, b, c, d, smile) in faces[1]:
+        #    for (x1, y1, w1, h1) in smile:
+        #        cv2.ellipse(frame, (x + round(w / 2), y + h - y1 - round(h1/2)), (round(w1/2), round(h1/2)), 0, 0, 360, (0, 255, 200), thickness=4)  # smile
+
+    cv2.imshow('computer camera online', rescaled_frame)
+
+
+def timer_live(prev_time):
+    current_time = time.perf_counter()
+    if current_time - prev_time >= 1:
+
+        prev_time = current_time
+        one_second_stop = True
+    else:
+        one_second_stop = False
+    res = [one_second_stop, prev_time]
+
+    return res
+
+
+def detectEyes(x, y, w, h, frame):
+    BGR = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    left_eye_cascade = cv2.CascadeClassifier('haarcascade_lefteye_2splits.xml')
+    right_eye_cascade = cv2.CascadeClassifier('haarcascade_righteye_2splits.xml')
+
+    # место, где искать глаза
+    restriction_of_left_eye_BGR = BGR[y: y + round(1 / 2 * h), x + round(1 / 2 * w): x + w]
+    restriction_of_right_eye_BGR = BGR[y: y + round(1 / 2 * h), x: x + round(1 / 2 * w)]
+
+    # ищем по каскаду
+    right_eye = right_eye_cascade.detectMultiScale(restriction_of_right_eye_BGR, scaleFactor=1.05, minNeighbors=3,
+                                                   minSize=(2, 2), flags=cv2.CASCADE_SCALE_IMAGE)
+    left_eye = left_eye_cascade.detectMultiScale(restriction_of_left_eye_BGR, scaleFactor=1.05, minNeighbors=3,
+                                                 minSize=(2, 2), flags=cv2.CASCADE_SCALE_IMAGE)
+
+    return [right_eye, left_eye]
+
+
+'''
+def detect_mouth(x, y, w, h, frame):
+    BGR = cv2.cvtColor(frame, cv2.IMREAD_COLOR)
+    smile_cascade = cv2.CascadeClassifier('haarcascade_smile.xml')
+    restriction_of_left_eye_BGR = BGR[y + round(h/2): y + h, x: x + w]
+
+    smile = smile_cascade.detectMultiScale(restriction_of_left_eye_BGR, scaleFactor=1.05, minNeighbors=20, minSize=(5, 5), flags=cv2.CASCADE_SCALE_IMAGE)
+    return smile
+'''
+
+def amount_faces(faces):
+    print(f'Amount of detected faces is to:', faces[3])
+
+def detectFaces(frame):
+    face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+    BGR = cv2.cvtColor(frame, cv2.IMREAD_COLOR)
+    faces = face_cascade.detectMultiScale(BGR, scaleFactor=1.03, minNeighbors=5, minSize=(30, 30),
+                                          flags=cv2.CASCADE_SCALE_IMAGE)
+    res_eyes = []
+    res_smile = []
+    face_coordinates = []
+    for (x, y, w, h) in faces:
+        res_eyes.append([x, y, w, h, detectEyes(x, y, w, h, frame)])
+        # res_smile.append([x, y, w, h, detect_mouth(x, y, w, h, frame)])
+        face_coordinates.append([x, y, w, h])
+    return [res_eyes, res_smile, face_coordinates, len(faces)]
+
+
+def rescaling(frame):
+    if frame.shape[0] > 1200 or frame.shape[1] > 1200:
+        new_shape1 = int(frame.shape[1] / 2)
+        new_shape0 = int(frame.shape[0] / 2)
+        size_of_new = (new_shape0, new_shape1)
+        return cv2.resize(frame, size_of_new, interpolation=cv2.INTER_AREA)
+    elif frame.shape[0] < 400 or frame.shape[1] < 400:
+        new_shape1 = int(frame.shape[1] * 2)
+        new_shape0 = int(frame.shape[0] * 2)
+        size_of_new = (new_shape0, new_shape1)
+        return cv2.resize(frame, size_of_new, interpolation=cv2.INTER_AREA)
+    else:
+        size_of_new = (frame.shape[1], frame.shape[0])
+        return cv2.resize(frame, size_of_new, interpolation=cv2.INTER_AREA)
+
+
+
+def main():
+    sign_exit = True
+    img_counter = 0
+    faces = None
+
+    camera = cv2.VideoCapture(0)  # computer camera
+    #camera = cv2.VideoCapture('2.png')  # downloaded photo
+
+    prev_time = time.perf_counter()
+    k = True
+    # subtractor = cv2.createBackgroundSubtractorMOG2(100, 5)
+
+    while sign_exit:
+        isTrue, frame = camera.read()
+        if not isTrue:
+            print("failed to grab frame")
+            break
+        # mask = subtractor.apply(frame)
+        # cv2.imshow('111', mask)
+        # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # ret, thresh = cv2.threshold(gray, 85, 225, cv2.THRESH_BINARY)
+        rescaled_frame = rescaling(frame)
+
+        if k:
+            faces = detectFaces(rescaled_frame)
+            k = False
+
+        m = timer_live(prev_time)
+
+        if m[0]:
+            faces = detectFaces(rescaled_frame)
+            amount_faces(faces)
+            prev_time = m[1]
+
+        draw(rescaled_frame, faces)
+        count_photo = keyboard_input(rescaled_frame, sign_exit, img_counter)
+        img_counter = count_photo
+
+    camera.release()
+    cv2.DestroyALLWIndows()
+
+
+main()
