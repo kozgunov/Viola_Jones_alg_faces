@@ -16,7 +16,7 @@ dataset
 ...
 
 ## 2. Technology stack
--Haar Cascade
--Grayscale decoloring
--Supervised learning
+- Haar Cascade
+- Grayscale decoloring
+- Supervised learning
 -
