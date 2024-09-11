@@ -18,9 +18,9 @@ this is the 2nd directory created in 2024 and implied to show the difference bet
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## Installation
 
-[Installation Trained model](https://github.com/kozgunov/Viola_Jones_alg_faces/edit/main/)
+[Installation Trained model](https://github.com/kozgunov/Viola_Jones_alg_faces/blob/main/V-J_2_with_ML/interactive_inference)
 
-[Installation Untrained model](https://github.com/kozgunov/Viola_Jones_alg_faces/edit/main/)
+[Installation Untrained model](https://github.com/kozgunov/Viola_Jones_alg_faces/blob/main/V-J_2_with_ML/interactive_inference)
 
 [Install dependencies](https://github.com/opencv/opencv/tree/master/data/haarcascades)
 
