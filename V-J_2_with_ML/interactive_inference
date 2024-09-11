@@ -1,0 +1,159 @@
+import cv2
+import numpy as np
+import time
+
+# Define the path to the trained model and Haar cascade
+MODEL_PATH = 'face_trained.yml'
+HAAR_CASCADE_PATH = 'haarcascade_frontalface_default.xml'
+FEATURES_PATH = 'features.npy'  # Optional
+LABELS_PATH = 'labels.npy'  # Optional
+NAMES_ARRAY = ['person1', 'person2']  # Replace with your actual labels (names)
+
+
+# Initialize the face detector and face recognizer
+face_cascade = cv2.CascadeClassifier(HAAR_CASCADE_PATH)
+face_recognizer = cv2.face.LBPHFaceRecognizer_create()
+
+# Load the trained model
+face_recognizer.read(MODEL_PATH)
+
+metadata = []
+
+def recognize_faces(frame):
+    """
+    Detect and recognize faces in the given frame.
+
+    Args:
+    frame: Image or video frame (BGR format).
+
+    Returns:
+    frame: The frame with the recognized faces and labels drawn.
+    """
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # Detect faces using the Viola-Jones algorithm
+    faces_rect = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4)
+
+    # Process each detected face
+    for (x, y, w, h) in faces_rect:
+        face_roi = gray[y:y + h, x:x + w]
+
+        # Recognize the face using the LBPH recognizer
+        label, confidence = face_recognizer.predict(face_roi)
+        person_name = NAMES_ARRAY[label]
+        confidence_score = round(confidence, 2)
+        print(f'Label = {NAMES_ARRAY[label]} with a confidence of {confidence}')
+
+        # Display the name of the person
+        cv2.putText(frame, f'{NAMES_ARRAY[label]} ({round(confidence, 2)})', (x, y - 10),
+                    cv2.FONT_HERSHEY_COMPLEX, 0.65, (0, 255, 0), thickness=2)
+        # Draw a rectangle around the face
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), thickness=2)
+
+        # Collect metadata (timestamp, label, confidence, coordinates)
+        metadata.append({
+            'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
+            'person': person_name,
+            'confidence': confidence_score,
+            'position': (x, y, w, h)
+        })
+
+    return frame
+
+
+def save_snapshot(frame, img_counter):
+    """ Save the current frame as a snapshot. """
+    img_name = f"snapshot_{img_counter}.png"
+    cv2.imwrite(img_name, frame)
+    print(f"Snapshot {img_name} saved!")
+
+def display_report(metadata):
+    """ Display a summary report based on collected metadata. """
+    print("\n--- Final Report ---")
+    for entry in metadata:
+        print(f"Time: {entry['timestamp']}, Person: {entry['person']}, Confidence: {entry['confidence']}%, Position: {entry['position']}")
+    print("\nTotal faces detected:", len(metadata))
+
+'''
+def inference_image(image_path):
+    """
+    Run face recognition on a single image and display the result.
+
+    Args:
+    image_path: Path to the image file.
+    """
+    # Load the image
+    frame = cv2.imread(image_path)
+    if frame is None:
+        print(f'Error: Unable to load image {image_path}')
+        return
+
+    # Recognize faces
+    result_frame = recognize_faces(frame)
+
+    # Show the image with recognized faces
+    cv2.imshow('Recognized Faces', result_frame)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+'''
+
+def inference_webcam():
+    """
+    Run real-time face recognition using the webcam.
+    """
+    # Initialize webcam
+    cap = cv2.VideoCapture(0)
+
+    if not cap.isOpened():
+        print("Error: Could not open webcam.")
+        return
+
+    img_counter = 0
+    processing=True
+
+    print("Press 'p' to pause/resume, 's' to save a snapshot, 'q' to quit.")  #usage
+
+
+    while True:
+        # Read a frame from the webcam
+        ret, frame = cap.read()
+        if not ret:
+            print("Error: Failed to capture image.")
+            break
+
+        # If processing is active, recognize faces
+        if processing:
+            result_frame = recognize_faces(frame)
+        else:
+            result_frame = frame.copy()
+
+        # Display the resulting frame
+        cv2.imshow('Webcam - Recognized Faces', result_frame)
+
+        # Handle user input
+        key = cv2.waitKey(1) & 0xFF
+
+        if key == ord('q'):
+            # Quit
+            break
+        elif key == ord('p'):
+            # Pause or resume processing
+            processing = not processing
+            print(f"{'Resumed' if processing else 'Paused'} processing.")
+        elif key == ord('s'):
+            # Save a snapshot
+            img_counter += 1
+            save_snapshot(result_frame, img_counter)
+
+    # Release the capture and close the windows
+    cap.release()
+    cv2.destroyAllWindows()
+
+inference_webcam()
+
+# Example usage:
+# To recognize faces in an image, call the following:
+# inference_image('path_to_image.jpg')
+
+# To recognize faces using the webcam in real-time, call the following:
+# inference_webcam()
