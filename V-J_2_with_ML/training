@@ -1,23 +1,37 @@
 import cv2
 import os
 import numpy as np
+from keras import Input
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 
 DATASET_DIR = 'dataset'  # path to your own dataset
 TRAINED_MODEL_PATH = 'face_trained.yml'  # save the model
 FEATURES_PATH = 'features.npy'  # path to the files including features and labels w.r.t. jpg
+MODEL_SAVE_PATH = 'cnn_face_recognizer.h5'  # path to save the CNN model
 LABELS_PATH = 'labels.npy'
 
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml') # default face detector via Haar Cascade
 
 features = []
 labels = []
-people = [person for person in os.listdir(DATASET_DIR)]  # array with photos
+people = [person for person in os.listdir(DATASET_DIR)]  # array with personalized photos
+IMG_SIZE = 64  # size to which each face image will be resized for CNN input
 
 
+def preprocess_image(img_path): # function for preprocessing
+    img_array = cv2.imread(img_path)
+    if img_array is None:
+        return None
+    gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY) # decrease dimensions
+    faces_rect = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4)
 
+    for (x, y, w, h) in faces_rect:
+        faces_roi = gray[y:y+h, x:x+w]  # highlight the region of interest
+        resized_face = cv2.resize(faces_roi, (IMG_SIZE, IMG_SIZE))  # resize face to 64 pixels for CNN
+        return resized_face
 
-
-
+'''
 
 def create_train():
 
@@ -67,3 +81,55 @@ face_recognizer.train(features, labels)
 # Save the trained model to a file
 face_recognizer.save(TRAINED_MODEL_PATH)
 print(f'Training complete. Model saved to {TRAINED_MODEL_PATH}.')
+
+'''
+
+def create_train(): # gathering training data
+    for person in people:
+        person_path = os.path.join(DATASET_DIR, person)
+        label = people.index(person)  # assign a label to each person. Imply that we have dataset
+
+        for img_name in os.listdir(person_path):  # Iteration over all images of the person
+            img_path = os.path.join(person_path, img_name)
+            preprocessed_image = preprocess_image(img_path)
+            
+            if preprocessed_image is None:
+                continue  # handling exception
+
+            features.append(preprocessed_image)  # gather pure face data to features
+            labels.append(label)  # gather matched labels corresponding to features
+
+
+print('Training data collection started...')
+create_train()
+print(f'Training data collected. Found {len(features)} faces.')
+
+features = np.array(features).reshape(-1, IMG_SIZE, IMG_SIZE, 1)  # features should be gray and fixed size
+labels = np.array(labels)
+
+# save the checkpoint)
+np.save(FEATURES_PATH, features)
+np.save(LABELS_PATH, labels)
+
+features = features / 255.0 # normalization
+
+# CNN 
+model = Sequential([
+    Input(shape=(IMG_SIZE, IMG_SIZE, 1)),
+    Conv2D(32, (3, 3), activation='relu'),
+    MaxPooling2D(pool_size=(2, 2)),
+    Conv2D(64, (3, 3), activation='relu'),
+    MaxPooling2D(pool_size=(2, 2)),
+    Flatten(),
+    Dense(128, activation='relu'),  
+    Dense(len(people), activation='softmax')  # output layer for multi-class classification
+])
+model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy']) # only accuracy using
+
+# Train
+print('Training the CNN model...')
+model.fit(features, labels, epochs=10, validation_split=0.2)  
+
+# checkpoint
+model.save(MODEL_SAVE_PATH)
+print(f'Training complete. Model saved to {MODEL_SAVE_PATH}.')
